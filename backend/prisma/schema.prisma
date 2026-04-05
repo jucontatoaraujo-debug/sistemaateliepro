@@ -1,0 +1,508 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== MULTI-TENANT =====================
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  plan        Plan     @default(FREE)
+  isActive    Boolean  @default(true)
+  logoUrl     String?
+  phone       String?
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  clients     Client[]
+  orders      Order[]
+  arts        Art[]
+  matrices    Matrix[]
+  productions Production[]
+  financials  Financial[]
+  products    Product[]
+  machines    Machine[]
+  tags        Tag[]
+  settings    TenantSettings?
+
+  @@map("tenants")
+}
+
+model TenantSettings {
+  id              String  @id @default(uuid())
+  tenantId        String  @unique
+  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  currency        String  @default("BRL")
+  defaultDeadline Int     @default(7)
+  pointsPerCm2    Float   @default(1000)
+  pricePerThousandPoints Float @default(0.50)
+  discountTiers   Json?   // [{ minQty: 10, discount: 5 }, ...]
+  businessHours   Json?
+  notifications   Json?
+
+  @@map("tenant_settings")
+}
+
+enum Plan {
+  FREE
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+// ===================== USUÁRIOS =====================
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  email        String
+  password     String
+  role         UserRole  @default(OPERATOR)
+  avatarUrl    String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  productions  Production[]
+  artVersions  ArtVersion[]
+  activities   ActivityLog[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  DESIGNER
+  OPERATOR
+  FINANCIAL
+}
+
+// ===================== CLIENTES =====================
+model Client {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  email        String?
+  whatsapp     String?
+  instagram    String?
+  cpfCnpj      String?
+  isCompany    Boolean  @default(false)
+  companyName  String?
+  address      String?
+  city         String?
+  state        String?
+  zipCode      String?
+  notes        String?
+  tags         Tag[]    @relation("ClientTags")
+  preferences  Json?    // { fonts: [], colors: [], styles: [] }
+  isActive     Boolean  @default(true)
+  totalOrders  Int      @default(0)
+  totalSpent   Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders       Order[]
+  arts         Art[]
+  matrices     Matrix[]
+  files        ClientFile[]
+
+  @@unique([tenantId, email])
+  @@map("clients")
+}
+
+model ClientFile {
+  id          String   @id @default(uuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name        String
+  url         String
+  type        String   // logo, arte, referencia
+  size        Int
+  createdAt   DateTime @default(now())
+
+  @@map("client_files")
+}
+
+// ===================== PRODUTOS =====================
+model Product {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  category    ProductCategory
+  sku         String?
+  stock       Int         @default(0)
+  minStock    Int         @default(5)
+  unit        String      @default("un")
+  cost        Float?
+  price       Float?
+  color       String?
+  size        String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  orderItems  OrderItem[]
+  stockMoves  StockMovement[]
+
+  @@map("products")
+}
+
+model StockMovement {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  type      String   // IN, OUT, ADJUSTMENT
+  quantity  Int
+  reason    String?
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  @@map("stock_movements")
+}
+
+enum ProductCategory {
+  CAMISETA
+  BONE
+  UNIFORME
+  TOALHA
+  MOCHILA
+  BOLSA
+  LINHA
+  MATERIAL
+  OUTRO
+}
+
+// ===================== PEDIDOS =====================
+model Order {
+  id            String      @id @default(uuid())
+  tenantId      String
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client      @relation(fields: [clientId], references: [id])
+  code          String
+  status        OrderStatus @default(NOVO)
+  priority      Priority    @default(NORMAL)
+
+  // Datas
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deadline      DateTime?
+  deliveredAt   DateTime?
+
+  // Financeiro
+  subtotal      Float       @default(0)
+  discount      Float       @default(0)
+  total         Float       @default(0)
+  isPaid        Boolean     @default(false)
+
+  // Informações do bordado
+  embroideryLocation String? // peito, manga, costas, etc
+  notes         String?
+  internalNotes String?
+
+  items         OrderItem[]
+  arts          Art[]
+  productions   Production[]
+  financial     Financial[]
+  payments      Payment[]
+  activities    ActivityLog[]
+
+  @@unique([tenantId, code])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String?
+  product         Product? @relation(fields: [productId], references: [id])
+  description     String
+  embroideryType  EmbroideryType
+  location        String?  // peito, manga, costas, centro
+  widthCm         Float?
+  heightCm        Float?
+  estimatedPoints Int?
+  quantity        Int      @default(1)
+  unitPrice       Float    @default(0)
+  total           Float    @default(0)
+  notes           String?
+  matrixId        String?
+  matrix          Matrix?  @relation(fields: [matrixId], references: [id])
+
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  NOVO
+  AGUARDANDO_ARTE
+  ARTE_EM_CRIACAO
+  AGUARDANDO_APROVACAO
+  ARTE_APROVADA
+  EM_PRODUCAO
+  FINALIZADO
+  ENTREGUE
+  CANCELADO
+}
+
+enum EmbroideryType {
+  NOME
+  LOGO
+  FRASE
+  PATCH
+  NUMERO
+  BRASAO
+  PERSONALIZADO
+}
+
+enum Priority {
+  URGENTE
+  ALTA
+  NORMAL
+  BAIXA
+}
+
+// ===================== ARTES =====================
+model Art {
+  id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId      String?
+  order        Order?    @relation(fields: [orderId], references: [id])
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id])
+  title        String
+  description  String?
+  status       ArtStatus @default(AGUARDANDO_CRIACAO)
+  currentVersion Int     @default(1)
+  approvedAt   DateTime?
+  approvedBy   String?   // nome do cliente
+  deadline     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  versions     ArtVersion[]
+  matrix       Matrix?
+
+  @@map("arts")
+}
+
+model ArtVersion {
+  id          String   @id @default(uuid())
+  artId       String
+  art         Art      @relation(fields: [artId], references: [id], onDelete: Cascade)
+  version     Int
+  fileUrl     String?
+  mockupUrl   String?
+  notes       String?
+  feedback    String?  // feedback do cliente
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([artId, version])
+  @@map("art_versions")
+}
+
+enum ArtStatus {
+  AGUARDANDO_CRIACAO
+  EM_CRIACAO
+  ENVIADA_PARA_APROVACAO
+  APROVADA
+  AJUSTE_SOLICITADO
+  CANCELADA
+}
+
+// ===================== MATRIZES =====================
+model Matrix {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId        String?
+  client          Client?  @relation(fields: [clientId], references: [id])
+  artId           String?  @unique
+  art             Art?     @relation(fields: [artId], references: [id])
+  name            String
+  description     String?
+  fileUrl         String?  // .DST, .PES, .JEF, etc
+  fileName        String?
+  fileFormat      String?  // DST, PES, JEF, EXP
+  previewUrl      String?
+  estimatedPoints Int?
+  widthCm         Float?
+  heightCm        Float?
+  colors          Int?     // número de cores
+  colorList       Json?    // lista de cores usadas
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  orderItems      OrderItem[]
+
+  @@map("matrices")
+}
+
+// ===================== PRODUÇÃO =====================
+model Production {
+  id            String           @id @default(uuid())
+  tenantId      String
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId       String
+  order         Order            @relation(fields: [orderId], references: [id])
+  machineId     String?
+  machine       Machine?         @relation(fields: [machineId], references: [id])
+  operatorId    String?
+  operator      User?            @relation(fields: [operatorId], references: [id])
+  status        ProductionStatus @default(AGUARDANDO_ARTE)
+  priority      Priority         @default(NORMAL)
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  estimatedTime Int?             // em minutos
+  actualTime    Int?             // em minutos
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  steps         ProductionStep[]
+
+  @@map("productions")
+}
+
+model ProductionStep {
+  id           String   @id @default(uuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  step         String   // SEPARACAO, MONTAGEM, BORDADO, ACABAMENTO, EMBALAGEM
+  status       String   @default("PENDENTE")
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  notes        String?
+  order        Int      @default(0)
+
+  @@map("production_steps")
+}
+
+model Machine {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  model      String?
+  heads      Int      @default(1)
+  isActive   Boolean  @default(true)
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  productions Production[]
+
+  @@map("machines")
+}
+
+enum ProductionStatus {
+  AGUARDANDO_ARTE
+  AGUARDANDO_MATERIAL
+  APROVADO
+  EM_PRODUCAO
+  PAUSADO
+  FINALIZADO
+  CANCELADO
+}
+
+// ===================== FINANCEIRO =====================
+model Financial {
+  id          String          @id @default(uuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?          @relation(fields: [orderId], references: [id])
+  clientId    String?
+  type        FinancialType
+  description String
+  amount      Float
+  dueDate     DateTime?
+  paidAt      DateTime?
+  status      FinancialStatus @default(PENDENTE)
+  category    String?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("financials")
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  orderId   String
+  order     Order         @relation(fields: [orderId], references: [id])
+  amount    Float
+  method    PaymentMethod
+  paidAt    DateTime      @default(now())
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  @@map("payments")
+}
+
+enum FinancialType {
+  RECEITA
+  DESPESA
+}
+
+enum FinancialStatus {
+  PENDENTE
+  PAGO
+  VENCIDO
+  CANCELADO
+}
+
+enum PaymentMethod {
+  DINHEIRO
+  PIX
+  CARTAO_DEBITO
+  CARTAO_CREDITO
+  TRANSFERENCIA
+  BOLETO
+}
+
+// ===================== TAGS =====================
+model Tag {
+  id       String   @id @default(uuid())
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+  color    String   @default("#6366f1")
+  clients  Client[] @relation("ClientTags")
+
+  @@unique([tenantId, name])
+  @@map("tags")
+}
+
+// ===================== LOG DE ATIVIDADES =====================
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@map("activity_logs")
+}
