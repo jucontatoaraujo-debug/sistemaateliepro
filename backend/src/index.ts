@@ -53,6 +53,11 @@ app.get('/health', (_, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Rota raiz
+app.get('/', (_, res) => {
+  res.json({ status: 'ok', message: 'API Ateliê Bordado funcionando!' });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tenants', tenantRoutes);
