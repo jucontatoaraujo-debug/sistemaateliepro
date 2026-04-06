@@ -1,0 +1,67 @@
+============================================
+  SISTEMA ATELIÊ BORDADO PRO
+  Guia de instalação - Hostinger VPS
+============================================
+
+REQUISITO: Plano VPS Hostinger (KVM 1 ou superior)
+Não funciona em hospedagem compartilhada.
+
+============================================
+PASSO A PASSO
+============================================
+
+1. CONTRATE O VPS NA HOSTINGER
+   - Acesse hpanel.hostinger.com
+   - Vá em VPS → Comprar VPS
+   - Escolha Ubuntu 22.04
+   - Anote o IP do servidor
+
+2. ACESSE O VPS (pelo terminal do Hostinger)
+   - No painel Hostinger → VPS → Gerenciar
+   - Clique em "Terminal" ou use SSH:
+     ssh root@SEU_IP
+
+3. ENVIE OS ARQUIVOS PARA O VPS
+   No terminal do seu computador:
+
+   scp -r atelie-bordado.zip root@SEU_IP:/var/www/
+
+   Ou pelo gerenciador de arquivos do Hostinger.
+
+4. DESCOMPACTE NO SERVIDOR
+   cd /var/www
+   unzip atelie-bordado.zip
+   mv Atelier atelie
+
+5. EXECUTE O INSTALADOR
+   cd /var/www/atelie
+   chmod +x instalar.sh
+   ./instalar.sh
+
+6. PRONTO!
+   Acesse: http://SEU_IP
+   Email:  admin@atelier.com
+   Senha:  admin123
+
+============================================
+CREDENCIAIS DO SISTEMA
+============================================
+
+Painel Admin:
+  Email: admin@atelier.com
+  Senha: admin123
+  Slug:  atelier-demo
+
+Designer:
+  Email: designer@atelier.com
+  Senha: admin123
+
+Operador:
+  Email: operador@atelier.com
+  Senha: admin123
+
+============================================
+SUPORTE
+============================================
+Em caso de dúvidas, entre em contato.
+============================================
