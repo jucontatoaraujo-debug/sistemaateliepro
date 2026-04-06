@@ -99,14 +99,14 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     // Gráfico de receita (últimos 6 meses)
     prisma.$queryRaw`
       SELECT
-        DATE_TRUNC('month', "paidAt") as month,
+        DATE_FORMAT(paidAt, '%Y-%m-01') as month,
         SUM(amount) as total
       FROM financials
-      WHERE "tenantId" = ${tenantId}
+      WHERE tenantId = ${tenantId}
         AND type = 'RECEITA'
         AND status = 'PAGO'
-        AND "paidAt" >= NOW() - INTERVAL '6 months'
-      GROUP BY DATE_TRUNC('month', "paidAt")
+        AND paidAt >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+      GROUP BY DATE_FORMAT(paidAt, '%Y-%m-01')
       ORDER BY month ASC
     `,
   ]);
