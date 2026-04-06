@@ -2,7 +2,7 @@
   "name": "atelier-frontend-deploy",
   "version": "1.0.0",
   "scripts": {
-    "build": "npm --prefix ../frontend install && npm --prefix ../frontend run build",
+    "build": "npm --prefix ../frontend install --no-audit --legacy-peer-deps && npm --prefix ../frontend run build",
     "start": "node frontend-server.js"
   }
 }
